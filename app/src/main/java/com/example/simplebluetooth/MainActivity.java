@@ -401,22 +401,25 @@ public class MainActivity extends AppCompatActivity {
 //
 //        }
         public void run() {
-            byte[] buffer = new byte[1024];  // buffer store for the stream
-            int bytes; // bytes returned from read()
+            byte[] buffer = new byte[mmInstream.avaialbe()];  // buffer store for the stream
+            int bytes == 0; // bytes returned from read()
             // Keep listening to the InputStream until an exception occurs
-            while (true) {
+            while (bytes < buffer.length()) {
                 try {
                     // Read from the InputStream
-                    bytes = mmInStream.available();
-                    if(bytes != 0) {
+                    //bytes = mmInStream.available();
+                    //if(bytes != 0) 
+                    {
                         SystemClock.sleep(100);
                         //pause and wait for rest of data
-                        bytes = mmInStream.available();
+                        //bytes = mmInStream.available();
                         // how many bytes are ready to be read?
-                        bytes = mmInStream.read(buffer, 0, bytes);
+                        //bytes = mmInStream.read(buffer, 0, bytes);
+                        
+                        buffer[bytes] == mmInStream.read();
+                        bytes++;
                         // record how many bytes we actually read
-                        mHandler.obtainMessage(MESSAGE_READ, bytes, -1, buffer)
-                                .sendToTarget(); // Send the obtained bytes to the UI activity
+                        
                     }
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -424,6 +427,9 @@ public class MainActivity extends AppCompatActivity {
                     break;
                 }
             }
+            
+            mHandler.obtainMessage(MESSAGE_READ, bytes, -1, buffer)
+                .sendToTarget(); // Send the obtained bytes to the UI activity
         }
 
         /* Call this from the main activity to send data to the remote device */
