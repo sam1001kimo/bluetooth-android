@@ -3,6 +3,7 @@ package com.example.simplebluetooth;
 import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothSocket;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -15,6 +16,7 @@ import android.os.SystemClock;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -45,8 +47,8 @@ public class MainActivity extends AppCompatActivity {
     private ArrayAdapter<String> mBTArrayAdapter;
     private ListView mDevicesListView;
     //private CheckBox mLED1;
-    private EditText inputdata;
     private Button sendDevice;
+    private Button graph;
 
     private Handler mHandler;
     // Our main handler that will receive callback notifications
@@ -65,7 +67,11 @@ public class MainActivity extends AppCompatActivity {
     // used in bluetooth handler to identify message update
     private final static int CONNECTING_STATUS = 3;
     // used in bluetooth handler to identify message status
-    private  String _recieveData = "";
+    private String _recieveData = "";
+    public int[] angle = new int[37];
+    public int[] distance = new int[37];
+    public String[] split = new String[2];
+    public int angleint = 0;
 
 
     @Override
@@ -73,44 +79,48 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         //初始化元件
-        mBluetoothStatus = (TextView)findViewById(R.id.bluetoothStatus);
+        mBluetoothStatus = (TextView) findViewById(R.id.bluetoothStatus);
         mReadBuffer = (TextView) findViewById(R.id.readBuffer);
-        mScanBtn = (Button)findViewById(R.id.scan);
-        mOffBtn = (Button)findViewById(R.id.off);
-        mDiscoverBtn = (Button)findViewById(R.id.discover);
-        mListPairedDevicesBtn = (Button)findViewById(R.id.PairedBtn);
+        mScanBtn = (Button) findViewById(R.id.scan);
+        mOffBtn = (Button) findViewById(R.id.off);
+        mDiscoverBtn = (Button) findViewById(R.id.discover);
+        mListPairedDevicesBtn = (Button) findViewById(R.id.PairedBtn);
         //mLED1 = (CheckBox)findViewById(R.id.checkboxLED1);
-        inputdata = (EditText)findViewById(R.id.editText);
-        sendDevice = (Button)findViewById(R.id.send);
+        sendDevice = (Button) findViewById(R.id.send);
+        graph = (Button) findViewById(R.id.graph);
 
         mBTArrayAdapter = new ArrayAdapter<String>
-                (this,android.R.layout.simple_list_item_1);
-        mBTAdapter = BluetoothAdapter.getDefaultAdapter();
+                (this, android.R.layout.simple_list_item_1);
+        BluetoothManager bluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+//        mBluetoothAdapter = bluetoothManager.getAdapter();
+
+        mBTAdapter = bluetoothManager.getAdapter();
+//        mBTAdapter = BluetoothAdapter.getDefaultAdapter();
         // get a handle on the bluetooth radio
 
-        mDevicesListView = (ListView)findViewById(R.id.devicesListView);
+        mDevicesListView = (ListView) findViewById(R.id.devicesListView);
         mDevicesListView.setAdapter(mBTArrayAdapter); // assign model to view
         mDevicesListView.setOnItemClickListener(mDeviceClickListener);
 
         // 詢問藍芽裝置權限
-        if(ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) !=
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) !=
                 PackageManager.PERMISSION_GRANTED)
             ActivityCompat.requestPermissions(this, new String[]
                     {Manifest.permission.ACCESS_COARSE_LOCATION}, 1);
 
         //定義執行緒 當收到不同的指令做對應的內容
-        mHandler = new Handler(){
-            public void handleMessage(android.os.Message msg){
-                if(msg.what == MESSAGE_READ){ //收到MESSAGE_READ 開始接收資料
+        mHandler = new Handler() {
+            public void handleMessage(android.os.Message msg) {
+                if (msg.what == MESSAGE_READ) { //收到MESSAGE_READ 開始接收資料
                     String readMessage = null;
                     try {
-                        readMessage = new String((byte[]) msg.obj,"UTF-8");
-                        readMessage=readMessage.trim();
-                        readMessage+="\n";
-                        //readMessage =  readMessage.substring(0,1);
+                        readMessage = new String((byte[]) msg.obj, "UTF-8");
+                        readMessage = readMessage.trim();
+                        arrange(readMessage);
+//                        readMessage =  readMessage.substring(0,1);
                         //取得傳過來字串的第一個字元，其餘為雜訊
+                        readMessage += "\n";
                         _recieveData += readMessage; //拼湊每次收到的字元成字串
-
 //                      //Test
 //                        byte[] data = (byte[])msg.obj;
 //                        readMessage = new String(data,"UTF-8");
@@ -127,23 +137,22 @@ public class MainActivity extends AppCompatActivity {
 
                 }
 
-                if(msg.what == CONNECTING_STATUS){
+                if (msg.what == CONNECTING_STATUS) {
                     //收到CONNECTING_STATUS 顯示以下訊息
-                    if(msg.arg1 == 1)
-                        mBluetoothStatus.setText("Connected to Device: "
-                                + (String)(msg.obj));
+                    if (msg.arg1 == 1)
+                        mBluetoothStatus.setText("連接上 "
+                                + (String) (msg.obj));
                     else
-                        mBluetoothStatus.setText("Connection Failed");
+                        mBluetoothStatus.setText("連線失敗");
                 }
             }
         };
 
         if (mBTArrayAdapter == null) {
             // Device does not support Bluetooth
-            mBluetoothStatus.setText("Status: Bluetooth not found");
-            Toast.makeText(getApplicationContext(),"Bluetooth device not found!",Toast.LENGTH_SHORT).show();
-        }
-        else {
+            mBluetoothStatus.setText("未找到藍芽裝置");
+            Toast.makeText(getApplicationContext(), "未找到藍芽裝置", Toast.LENGTH_SHORT).show();
+        } else {
 
            /* mLED1.setOnClickListener(new View.OnClickListener(){
                 @Override
@@ -153,13 +162,14 @@ public class MainActivity extends AppCompatActivity {
                 }
             });*/
 
-            sendDevice.setOnClickListener(new View.OnClickListener(){
+            sendDevice.setOnClickListener(new View.OnClickListener() {
                 //當按下send開始傳輸資料
                 @Override
-                public void onClick(View v){
+                public void onClick(View v) {
                     _recieveData = ""; //清除上次收到的資料
-                    if(mConnectedThread != null) //First check to make sure thread created
-                        mConnectedThread.write(inputdata.getText().toString());
+                    mReadBuffer.setText("");
+                    if (mConnectedThread != null) //First check to make sure thread created
+                        mConnectedThread.write("1");
                     //傳送將輸入的資料出去
                 }
             });
@@ -172,40 +182,62 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
 
-            mOffBtn.setOnClickListener(new View.OnClickListener(){
+            mOffBtn.setOnClickListener(new View.OnClickListener() {
                 @Override
-                public void onClick(View v){
+                public void onClick(View v) {
                     bluetoothOff(v);
                 }
             });
 
             mListPairedDevicesBtn.setOnClickListener(new View.OnClickListener() {
                 @Override
-                public void onClick(View v){
+                public void onClick(View v) {
                     listPairedDevices(v);
                 }
             });
 
-            mDiscoverBtn.setOnClickListener(new View.OnClickListener(){
+            mDiscoverBtn.setOnClickListener(new View.OnClickListener() {
                 @Override
-                public void onClick(View v){
+                public void onClick(View v) {
                     discover(v);
+                }
+            });
+
+            graph.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    newgraph(v);
                 }
             });
         }
     }
 
-    private void bluetoothOn(View view){
-        if (!mBTAdapter.isEnabled()) {//如果藍芽沒開啟
+    //將收到的數值儲存到陣列裡
+    private void arrange(String string) {
+        try {
+            split = string.split(",");
+            angleint = Integer.parseInt(split[0]);
+            int num=(int)(angleint / 5);
+            angle[num] = (int)Integer.parseInt(split[0]);
+            distance[num] = (int)Integer.parseInt(split[1]);
+            Factory.x[num]=(float)(distance[num]*Math.cos(Math.toRadians(angle[num])));
+            Factory.y[num]=(float)(distance[num]*Math.sin(Math.toRadians(angle[num])));
+        } catch (Exception e) {
+            System.out.print(e.getMessage());
+        }
+    }
+
+
+    private void bluetoothOn(View view) {
+        if (mBTAdapter == null || !mBTAdapter.isEnabled()) {//如果藍芽沒開啟
             Intent enableBtIntent = new
                     Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);//跳出視窗
             startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
             //開啟設定藍芽畫面
-            mBluetoothStatus.setText("Bluetooth enabled");
-            Toast.makeText(getApplicationContext(),"Bluetooth turned on",Toast.LENGTH_SHORT).show();
-        }
-        else{
-            Toast.makeText(getApplicationContext(),"Bluetooth is already on",
+            mBluetoothStatus.setText("已開啟藍芽");
+            Toast.makeText(getApplicationContext(), "開啟藍芽", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(getApplicationContext(), "已開啟藍芽",
                     Toast.LENGTH_SHORT).show();
         }
     }
@@ -213,44 +245,41 @@ public class MainActivity extends AppCompatActivity {
     // Enter here after user selects "yes" or "no" to enabling radio
     //定義當按下跳出是否開啟藍芽視窗後要做的內容
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent Data){
+    protected void onActivityResult(int requestCode, int resultCode, Intent Data) {
         // Check which request we're responding to
         if (requestCode == REQUEST_ENABLE_BT) {
             // Make sure the request was successful
             if (resultCode == RESULT_OK) {
                 // The user picked a contact.
                 // The Intent's data Uri identifies which contact was selected.
-                mBluetoothStatus.setText("Enabled");
-            }
-            else
-                mBluetoothStatus.setText("Disabled");
+                mBluetoothStatus.setText("已開啟藍芽");
+            } else
+                mBluetoothStatus.setText("藍芽已關閉");
         }
     }
 
-    private void bluetoothOff(View view){
+    private void bluetoothOff(View view) {
         mBTAdapter.disable(); // turn off bluetooth
-        mBluetoothStatus.setText("Bluetooth disabled");
-        Toast.makeText(getApplicationContext(),"Bluetooth turned Off",
+        mBluetoothStatus.setText("藍芽已關閉");
+        Toast.makeText(getApplicationContext(), "關閉藍芽",
                 Toast.LENGTH_SHORT).show();
     }
 
-    private void discover(View view){
+    private void discover(View view) {
         // Check if the device is already discovering
-        if(mBTAdapter.isDiscovering()){ //如果已經找到裝置
+        if (mBTAdapter.isDiscovering()) { //如果已經找到裝置
             mBTAdapter.cancelDiscovery(); //取消尋找
-            Toast.makeText(getApplicationContext(),"Discovery stopped",Toast.LENGTH_SHORT).show();
-        }
-        else{
-            if(mBTAdapter.isEnabled()) { //如果沒找到裝置且已按下尋找
+            Toast.makeText(getApplicationContext(), "取消尋找", Toast.LENGTH_SHORT).show();
+        } else {
+            if (mBTAdapter.isEnabled()) { //如果沒找到裝置且已按下尋找
                 mBTArrayAdapter.clear(); // clear items
                 mBTAdapter.startDiscovery(); //開始尋找
-                Toast.makeText(getApplicationContext(), "Discovery started",
+                Toast.makeText(getApplicationContext(), "開始尋找",
                         Toast.LENGTH_SHORT).show();
                 registerReceiver(blReceiver, new
                         IntentFilter(BluetoothDevice.ACTION_FOUND));
-            }
-            else{
-                Toast.makeText(getApplicationContext(), "Bluetooth not on",
+            } else {
+                Toast.makeText(getApplicationContext(), "藍芽未開啟",
                         Toast.LENGTH_SHORT).show();
             }
         }
@@ -260,7 +289,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
-            if(BluetoothDevice.ACTION_FOUND.equals(action)){
+            if (BluetoothDevice.ACTION_FOUND.equals(action)) {
                 BluetoothDevice device =
                         intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
                 // add the name to the list
@@ -270,40 +299,42 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
-    private void listPairedDevices(View view){
+    private void listPairedDevices(View view) {
         mPairedDevices = mBTAdapter.getBondedDevices();
-        if(mBTAdapter.isEnabled()) {
+        if (mBTAdapter.isEnabled()) {
             // put it's one to the adapter
             for (BluetoothDevice device : mPairedDevices)
                 mBTArrayAdapter.add(device.getName() + "\n" + device.getAddress());
 
-            Toast.makeText(getApplicationContext(), "Show Paired Devices",
+            Toast.makeText(getApplicationContext(), "顯示配對裝置",
                     Toast.LENGTH_SHORT).show();
-        }
-        else
-            Toast.makeText(getApplicationContext(), "Bluetooth not on",
+        } else
+            Toast.makeText(getApplicationContext(), "藍芽未開啟",
                     Toast.LENGTH_SHORT).show();
+    }
+
+    private void newgraph(View view) {
+        startActivity(new Intent(MainActivity.this,Graph.class));
     }
 
     private AdapterView.OnItemClickListener mDeviceClickListener = new
             AdapterView.OnItemClickListener() {
                 public void onItemClick(AdapterView<?> av, View v, int arg2, long arg3) {
 
-                    if(!mBTAdapter.isEnabled()) {
-                        Toast.makeText(getBaseContext(), "Bluetooth not on",
+                    if (!mBTAdapter.isEnabled()) {
+                        Toast.makeText(getBaseContext(), "藍芽未開啟",
                                 Toast.LENGTH_SHORT).show();
                         return;
                     }
 
-                    mBluetoothStatus.setText("Connecting...");
+                    mBluetoothStatus.setText("連線中...");
                     // Get the device MAC address, which is the last 17 chars in the View
                     String info = ((TextView) v).getText().toString();
                     final String address = info.substring(info.length() - 17);
-                    final String name = info.substring(0,info.length() - 17);
+                    final String name = info.substring(0, info.length() - 17);
 
                     // Spawn a new thread to avoid blocking the GUI one
-                    new Thread()
-                    {
+                    new Thread() {
                         public void run() {
                             boolean fail = false;
                             //取得裝置MAC找到連接的藍芽裝置
@@ -314,7 +345,7 @@ public class MainActivity extends AppCompatActivity {
                                 //建立藍芽socket
                             } catch (IOException e) {
                                 fail = true;
-                                Toast.makeText(getBaseContext(), "Socket creation failed",
+                                Toast.makeText(getBaseContext(), "連線建立失敗",
                                         Toast.LENGTH_SHORT).show();
                             }
                             // Establish the Bluetooth socket connection.
@@ -329,11 +360,11 @@ public class MainActivity extends AppCompatActivity {
                                             .sendToTarget();
                                 } catch (IOException e2) {
                                     //insert code to deal with this
-                                    Toast.makeText(getBaseContext(), "Socket creation failed",
+                                    Toast.makeText(getBaseContext(), "連線建立失敗",
                                             Toast.LENGTH_SHORT).show();
                                 }
                             }
-                            if(fail == false) {
+                            if (fail == false) {
                                 //開啟執行緒用於傳輸及接收資料
                                 mConnectedThread = new ConnectedThread(mBTSocket);
                                 mConnectedThread.start();
@@ -348,7 +379,7 @@ public class MainActivity extends AppCompatActivity {
 
     private BluetoothSocket createBluetoothSocket(BluetoothDevice device) throws
             IOException {
-        return  device.createRfcommSocketToServiceRecord(BTMODULEUUID);
+        return device.createRfcommSocketToServiceRecord(BTMODULEUUID);
         //creates secure outgoing connection with BT device using UUID
     }
 
@@ -367,13 +398,14 @@ public class MainActivity extends AppCompatActivity {
             try {
                 tmpIn = socket.getInputStream();
                 tmpOut = socket.getOutputStream();
-            } catch (IOException e) { }
+            } catch (IOException e) {
+            }
 
             mmInStream = tmpIn;
             mmOutStream = tmpOut;
         }
 
-//        public void run() {
+        //        public void run() {
 //            int bytes;
 //            byte[] buffer = new byte[1024];
 //            String end = "\n";
@@ -408,7 +440,7 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     // Read from the InputStream
                     bytes = mmInStream.available();
-                    if(bytes != 0) {
+                    if (bytes != 0) {
                         SystemClock.sleep(100);
                         //pause and wait for rest of data
                         bytes = mmInStream.available();
@@ -431,14 +463,16 @@ public class MainActivity extends AppCompatActivity {
             byte[] bytes = input.getBytes();           //converts entered String into bytes
             try {
                 mmOutStream.write(bytes);
-            } catch (IOException e) { }
+            } catch (IOException e) {
+            }
         }
 
         /* Call this from the main activity to shutdown the connection */
         public void cancel() {
             try {
                 mmSocket.close();
-            } catch (IOException e) { }
+            } catch (IOException e) {
+            }
         }
     }
 }

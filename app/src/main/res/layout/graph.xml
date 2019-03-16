@@ -1,0 +1,22 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+
+    android:id="@+id/radar"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="10sp"
+    >
+
+    <TextView
+        android:id="@+id/text1"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:text="雷達圖"
+        android:textSize="35sp" />
+
+    <com.example.simplebluetooth.RadarView
+        android:layout_width="match_parent"
+        android:layout_height="150dp" />
+
+</LinearLayout>
